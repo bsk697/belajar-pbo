@@ -2,12 +2,12 @@
 /**
  * Program Manajemen Data Transaksi Pinjol Berbasis PHP
  * Memenuhi kriteria:
- * - Minimal 4 variabel dengan tipe data berbeda
+ * - Minimal 4 variabel dengan tipe data berbeda (string, float, int, boolean)
  * - Minimal 1 percabangan (if-else)
- * - Minimal 1 perulangan (while / foreach)
- * - Minimal 1 function buatan sendiri
+ * - Minimal 1 perulangan (foreach)
+ * - Minimal 1 function buatan sendiri (hitungTotalPengembalian, hitungCicilanPerBulan)
  * - Output berjalan lancar di localhost
- * - Tampilan menarik dan rapi
+ * - Tampilan menarik dan rapi dengan informasi cicilan per bulan dan bunga (%)
  */
 
 // Inisialisasi Session untuk penyimpanan data sementara di server lokal
@@ -16,22 +16,33 @@ session_start();
 if (!isset($_SESSION['data_pinjol'])) {
     // Data awal dummy untuk demonstrasi perulangan
     $_SESSION['data_pinjol'] = [
-        ["id" => "PCL-001", "nama" => "Siti Rahma", "jumlah" => 2500000.00, "tenor" => 6, "status" => "Lancar"],
-        ["id" => "PCL-002", "nama" => "Ahmad Fauzi", "jumlah" => 5000000.00, "tenor" => 12, "status" => "Macet"]
+        ["id" => "PCL-001", "nama" => "Siti Rahma", "jumlah" => 2500000.00, "bunga" => 12.0, "tenor" => 6, "status" => "Lancar"],
+        ["id" => "PCL-002", "nama" => "Ahmad Fauzi", "jumlah" => 5000000.00, "bunga" => 15.0, "tenor" => 12, "status" => "Macet"]
     ];
 }
 
 /**
  * Function buatan sendiri untuk menghitung estimasi total pengembalian
  * @param float $jumlah_pinjaman
+ * @param float $bunga_persen
  * @param int $tenor_bulan
  * @return float
  */
-function hitungTotalPengembalian($jumlah_pinjaman, $tenor_bulan) {
-    // Suku bunga tetap per tahun diasumsikan 12% (1% per bulan)
-    $bunga_per_bulan = 0.01;
-    $total_bunga = $jumlah_pinjaman * $bunga_per_bulan * $tenor_bulan;
+function hitungTotalPengembalian($jumlah_pinjaman, $bunga_persen, $tenor_bulan) {
+    // Konversi bunga tahunan (%) ke total bunga selama tenor
+    $total_bunga = $jumlah_pinjaman * ($bunga_persen / 100) * ($tenor_bulan / 12);
     return $jumlah_pinjaman + $total_bunga;
+}
+
+/**
+ * Function buatan sendiri untuk menghitung cicilan per bulan
+ * @param float $total_pengembalian
+ * @param int $tenor_bulan
+ * @return float
+ */
+function hitungCicilanPerBulan($total_pengembalian, $tenor_bulan) {
+    if ($tenor_bulan <= 0) return 0;
+    return $total_pengembalian / $tenor_bulan;
 }
 
 // Penanganan Form Tambah Data
@@ -41,8 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['tambah_data'])) {
     $nama_peminjam = trim($_POST['nama']);
     $status_kredit = "Lancar"; 
 
-    // 2. Variabel Float / Double ($jumlah_pinjaman)
+    // 2. Variabel Float / Double ($jumlah_pinjaman, $bunga_persen)
     $jumlah_pinjaman = (float) $_POST['jumlah'];
+    $bunga_persen = (float) $_POST['bunga'];
 
     // 3. Variabel Integer ($tenor_bulan)
     $tenor_bulan = (int) $_POST['tenor'];
@@ -50,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['tambah_data'])) {
     // 4. Variabel Boolean ($is_valid) untuk validasi percabangan
     $is_valid = true;
 
-    if (empty($nama_peminjam) || $jumlah_pinjaman <= 0 || $tenor_bulan <= 0) {
+    if (empty($nama_peminjam) || $jumlah_pinjaman <= 0 || $tenor_bulan <= 0 || $bunga_persen < 0) {
         $is_valid = false;
     }
 
@@ -63,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['tambah_data'])) {
             "id" => $id_transaksi,
             "nama" => $nama_peminjam,
             "jumlah" => $jumlah_pinjaman,
+            "bunga" => $bunga_persen,
             "tenor" => $tenor_bulan,
             "status" => $status_kredit
         ];
@@ -107,7 +120,7 @@ if (isset($_GET['hapus'])) {
             padding: 30px;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             background: var(--card-bg);
             padding: 30px;
@@ -175,10 +188,14 @@ if (isset($_GET['hapus'])) {
         button:hover {
             background-color: var(--primary-hover);
         }
+        .table-responsive {
+            overflow-x: auto;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
+            white-space: nowrap;
         }
         th, td {
             padding: 14px 16px;
@@ -215,7 +232,7 @@ if (isset($_GET['hapus'])) {
 <body>
 
 <div class="container">
-    <h2>MANAJEMEN DATA TRANSAKSI PINJAMAN ONLINE</h2>
+    <h2>Manajemen Data Transaksi Pinjaman Online</h2>
 
     <?php if (!empty($pesan_sukses)): ?>
         <div class="alert"><?= $pesan_sukses ?></div>
@@ -232,55 +249,68 @@ if (isset($_GET['hapus'])) {
             <input type="number" name="jumlah" step="50000" placeholder="Contoh: 3000000" required>
         </div>
         <div class="form-group">
+            <label>Bunga (% per tahun)</label>
+            <input type="number" name="bunga" step="0.5" placeholder="Contoh: 12" required>
+        </div>
+        <div class="form-group">
             <label>Tenor (Bulan)</label>
             <input type="number" name="tenor" placeholder="Contoh: 12" required>
         </div>
-        <div class="form-group" style="justify-content: flex-end;">
+        <div class="form-group full" style="align-items: flex-end;">
             <button type="submit" name="tambah_data">Simpan Transaksi</button>
         </div>
     </form>
 
     <!-- Tabel Data Peminjam (Menggunakan Perulangan / Loop) -->
     <h3>Daftar Transaksi Aktif</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nama</th>
-                <th>Pinjaman Awal</th>
-                <th>Tenor</th>
-                <th>Estimasi Total Pengembalian</th>
-                <th>Status</th>
-                <th>Aksi</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php 
-            // Perulangan minimal 1 (foreach loop untuk menampilkan data)
-            if (empty($_SESSION['data_pinjol'])) {
-                echo '<tr><td colspan="7" style="text-align: center; color: #64748b;">Belum ada data transaksi.</td></tr>';
-            } else {
-                foreach ($_SESSION['data_pinjol'] as $index => $item) {
-                    // Memanggil function buatan sendiri: hitungTotalPengembalian()
-                    $total_kembali = hitungTotalPengembalian($item['jumlah'], $item['tenor']);
-                    
-                    // Percabangan untuk menentukan kelas badge status
-                    $badge_class = ($item['status'] == 'Lancar') ? 'badge-lancar' : 'badge-macet';
-                    
-                    echo "<tr>";
-                    echo "<td><strong>{$item['id']}</strong></td>";
-                    echo "<td>" . htmlspecialchars($item['nama']) . "</td>";
-                    echo "<td>Rp " . number_format($item['jumlah'], 0, ',', '.') . "</td>";
-                    echo "<td>{$item['tenor']} Bulan</td>";
-                    echo "<td>Rp " . number_format($total_kembali, 0, ',', '.') . "</td>";
-                    echo "<td><span class='badge {$badge_class}'>{$item['status']}</span></td>";
-                    echo "<td><a href='?hapus={$index}' class='btn-delete' onclick=\"return confirm('Yakin ingin menghapus data ini?')\">Hapus</a></td>";
-                    echo "</tr>";
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nama</th>
+                    <th>Pinjaman Awal</th>
+                    <th>Bunga</th>
+                    <th>Tenor</th>
+                    <th>Total Pengembalian</th>
+                    <th>Cicilan / Bulan</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php 
+                // Perulangan minimal 1 (foreach loop untuk menampilkan data)
+                if (empty($_SESSION['data_pinjol'])) {
+                    echo '<tr><td colspan="9" style="text-align: center; color: #64748b;">Belum ada data transaksi.</td></tr>';
+                } else {
+                    foreach ($_SESSION['data_pinjol'] as $index => $item) {
+                        // Memanggil function buatan sendiri: hitungTotalPengembalian() & hitungCicilanPerBulan()
+                        $bunga_item = isset($item['bunga']) ? $item['bunga'] : 12.0; // fallback jika data lama
+                        $total_kembali = hitungTotalPengembalian($item['jumlah'], $bunga_item, $item['tenor']);
+                        $cicilan_bln = hitungCicilanPerBulan($total_kembali, $item['tenor']);
+                        
+                        // Percabangan untuk menentukan kelas badge status
+                        $badge_class = ($item['status'] == 'Lancar') ? 'badge-lancar' : 'badge-macet';
+                        
+                        echo "<tr>";
+                        echo "<td><strong>{$item['id']}</strong></td>";
+                        echo "<td>" . htmlspecialchars($item['nama']) . "</td>";
+                        echo "<td>Rp " . number_format($item['jumlah'], 0, ',', '.') . "</td>";
+                        echo "<td>{$bunga_item}%</td>";
+                        echo "<td>{$item['tenor']} Bulan</td>";
+                        echo "<td>Rp " . number_format($total_kembali, 0, ',', '.') . "</td>";
+                        echo "<td><strong>Rp " . number_format($cicilan_bln, 0, ',', '.') . "</strong></td>";
+                        echo "<td><span class='badge {$badge_class}'>{$item['status']}</span></td>";
+                        echo "<td><a href='?hapus={$index}' class='btn-delete' onclick=\"return confirm('Yakin ingin menghapus data ini?')\">Hapus</a></td>";
+                        echo "</tr>";
+                    }
                 }
-            }
-            ?>
-        </tbody>
-    </table>
+                ?>
+            </tbody>
+        </table>
+    </div>
 </div>
+
 </body>
 </html>

@@ -43,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin: 0;
             padding: 0;
             /* Background diganti dengan gambar tema anime */
-            background: url("belajar-pbo/anime.jpg") no-repeat center center fixed;
+            background: url("https://images4.alphacoders.com/108/thumb-1920-1080044.png") no-repeat center center fixed;
             background-size: cover;
             min-height: 100vh;
         }
